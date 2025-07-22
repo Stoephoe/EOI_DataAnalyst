@@ -60,22 +60,6 @@ def parse_datetime_from_filename(filename):
     y, m, d, hms = match.groups()
     return datetime.strptime(f"{y}-{m}-{d} {hms[:2]}:{hms[2:4]}:{hms[4:]}", "%Y-%m-%d %H:%M:%S")
 
-def clean_signal(series, window=1):
-    """Clip outliers (±3*IQR) then rolling median."""
-    if series.isnull().all():
-        return series
-    s = series.copy()
-    clean = s.dropna()
-    q1 = clean.quantile(0.25)
-    q3 = clean.quantile(0.75)
-    iqr = q3 - q1
-    lower_bound = q1 - 3 * iqr
-    upper_bound = q3 + 3 * iqr
-    clipped = clean.clip(lower=lower_bound, upper=upper_bound)
-    smoothed = clipped.rolling(window=window, center=True, min_periods=1).median()
-    s.loc[smoothed.index] = smoothed
-    return s
-
 def build_time_index(df, file_start_time):
     """Return pandas.DatetimeIndex aligned to first timestamp_s."""
     base = df['timestamp_s'].iloc[0]
@@ -100,8 +84,8 @@ def downsample(x, y, max_points):
     idx = np.linspace(0, len(y)-1, max_points).astype(int)
     return x.iloc[idx], y.iloc[idx]
 
-def load_and_clean_csv_files(folder_path):
-    """Load, clean, and parse all usable CSV files in the given folder."""
+def load_csv_files(folder_path):
+    """Load and parse all usable CSV files in the given folder (no cleaning)."""
     csv_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.csv')]
     if not csv_files:
         raise FileNotFoundError("No CSV files found.")
@@ -125,11 +109,6 @@ def load_and_clean_csv_files(folder_path):
         # Derived columns
         if 'motor_current_a' in df and 'battery_voltage_v' in df:
             df['motor_power_kw'] = (df['motor_current_a'] * df['battery_voltage_v']) / 1000.0
-
-        # Clean data (skip timestamp)
-        for col in df.columns:
-            if col != 'timestamp_s':
-                df[col] = clean_signal(df[col])
 
         start_dt = parse_datetime_from_filename(file)
         if start_dt is None:
@@ -311,43 +290,6 @@ def generate_combined_plot(datasets, output_file):
         showarrow=False, font=dict(size=12, color="gray")
     ))
 
-    # data_point_annos = []
-
-    # if 'rpm' in df:
-    #     idx_max_rpm = df['rpm'].idxmax()
-    #     t_max_rpm = t.iloc[idx_max_rpm]
-    #     rpm_max_val = df['rpm'].max()
-    #     print(f"Annotating max RPM at t={t_max_rpm}, value={rpm_max_val}")
-    #     fig.add_annotation(
-    #         x=t_max_rpm,   # This must be a pd.Timestamp (from t)
-    #         y=rpm_max_val,
-    #         xref='x', yref='y2',
-    #         text=f"Max RPM: {rpm_max_val:.0f}",
-    #         showarrow=True, arrowhead=2, ax=0, ay=-50,
-    #         font=dict(color='white', size=13),
-    #         bgcolor="rgba(31, 119, 180, 0.7)",
-    #         bordercolor="white", borderwidth=1,
-    #     )
-
-    # if 'gnss_speed_kmh' in df:
-    #     idx_max_spd = df['gnss_speed_kmh'].idxmax()
-    #     t_max_spd = t.iloc[idx_max_spd]
-    #     spd_max_val = df['gnss_speed_kmh'].max()
-    #     data_point_annos.append(dict(
-    #         x=t_max_spd, y=spd_max_val,
-    #         xref='x', yref='y',
-    #         text=f"Max Speed: {spd_max_val:.1f} km/h",
-    #         showarrow=True, arrowhead=2, ax=0, ay=-60,
-    #         font=dict(color='white', size=12),
-    #         bgcolor="rgba(214, 39, 40, 0.7)"
-    #     ))
-
-    # Combine with previous layout (header) annotations:
-    # for anno in data_point_annos:
-    #     fig.add_annotation(**anno)
-    
-
-
     fig.update_layout(annotations=annotations)
 
     # Save figure
@@ -410,7 +352,7 @@ def main():
     print("=== Interactive Sensor Plotter ===")
     folder_path = select_folder()
     print(f"Selected folder: {folder_path}")
-    datasets = load_and_clean_csv_files(folder_path)
+    datasets = load_csv_files(folder_path)
     now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_file = os.path.join(folder_path, f"combined_interactive_plot_{now_str}.html")
     generate_combined_plot(datasets, output_file)
