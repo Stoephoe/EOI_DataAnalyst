@@ -12,7 +12,7 @@ COMBINE_ALL_FILES = True      # Only combined output is supported in this versio
 INCLUDE_SMOOTHED = True       # Add smoothed overlay traces (median rolling)
 SMOOTH_WINDOW_SECONDS = 2     # Smoothing window in seconds
 MAX_POINTS_PER_TRACE = 5000   # Downsample if too many points (None disables)
-SECONDARY_Y_SIGNALS = ['duty_cycle_p', 'rpm']
+SECONDARY_Y_SIGNALS = ['rpm']
 # ================ END USER CONFIG ====================
 
 COLOR_SEQ = {
