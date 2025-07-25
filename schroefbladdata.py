@@ -12,7 +12,7 @@ COMBINE_ALL_FILES = True      # Only combined output is supported in this versio
 INCLUDE_SMOOTHED = True       # Add smoothed overlay traces (median rolling)
 SMOOTH_WINDOW_SECONDS = 2     # Smoothing window in seconds
 MAX_POINTS_PER_TRACE = 5000   # Downsample if too many points (None disables)
-SECONDARY_Y_SIGNALS = ['rpm']
+SECONDARY_Y_SIGNALS = ['rpm','propeller_torque_nm','propeller_thrust_n','motor_torque_nm']
 # ================ END USER CONFIG ====================
 
 COLOR_SEQ = {
@@ -22,7 +22,12 @@ COLOR_SEQ = {
     'motor_current_a':  '#8c564b',
     'duty_cycle_p':     '#9467bd',
     'gnss_speed_kmh':   '#d62728',
-    'motor_power_kw':   '#17becf'
+    'motor_power_kw':   '#17becf',
+    'motor_torque_nm':    '#bcbd22',
+    'propeller_torque_nm':'#e377c2',
+    'propeller_power_kw': '#7f7f7f',
+    'thrust_power_kw':    '#17a2b8',
+    'propeller_thrust_n':  '#ff1493',
 }
 LABELS = {
     'timestamp_s':      'Timestamp (s)',
@@ -33,6 +38,11 @@ LABELS = {
     'duty_cycle_p':     'Duty Cycle (%)',
     'gnss_speed_kmh':   'GPS Speed (km/h)',
     'motor_power_kw':   'Motor Power (kW)',
+    'motor_torque_nm':     'Motor Torque (Nm)',
+    'propeller_torque_nm': 'Propeller Torque (Nm)',
+    'propeller_power_kw':  'Propeller Power (kW)',
+    'thrust_power_kw':     'Thrust Power (kW)',
+    'propeller_thrust_n':  'Propeller Thrust (N)',
 }
 ALIASES = {
     'motor_rpm': 'rpm',
@@ -106,9 +116,21 @@ def load_csv_files(folder_path):
             print(f"⚠ Skipping {file}: empty or missing timestamp.")
             continue
 
+
         # Derived columns
         if 'motor_current_a' in df and 'battery_voltage_v' in df:
             df['motor_power_kw'] = (df['motor_current_a'] * df['battery_voltage_v']) / 1000.0
+
+        if 'motor_power_kw' in df and 'rpm' in df:
+            df['motor_torque_nm'] = (df['motor_power_kw'] * 1000) / (2 * np.pi * df['rpm'] / 60)
+            df['propeller_torque_nm'] = df['motor_torque_nm'] * 7  # Gear ratio 1:7
+            df['propeller_power_kw'] = df['propeller_torque_nm'] * 2 * np.pi * (df['rpm'] / 60) / 1000
+            df['thrust_power_kw'] = df['propeller_power_kw'] * 0.7  # 70% efficiency
+
+        if 'thrust_power_kw' in df and 'gnss_speed_kmh' in df:
+            velocity_ms = df['gnss_speed_kmh'] / 3.6
+            velocity_ms = velocity_ms.replace(0, np.nan)  # avoid division by zero
+            df['propeller_thrust_n'] = (df['thrust_power_kw'] * 1000) / velocity_ms    
 
         start_dt = parse_datetime_from_filename(file)
         if start_dt is None:
@@ -133,6 +155,7 @@ def load_csv_files(folder_path):
             time=time_index
         ))
         print(f"✅ Loaded {file}: {len(df)} rows, signals={candidate_cols}")
+
 
     if not datasets:
         raise SystemExit("No usable datasets found.")
